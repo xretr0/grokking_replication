@@ -2,7 +2,7 @@ import torch
 import transformer_lens
 import pickle
 # import time
-from typing import Any
+from typing import Any, Optional
 import os
 
 
@@ -18,8 +18,10 @@ def load_model_to_pickle() -> None:
         pickle.dump(model, out_f)
 
 
-def pickle_the_variable(**kwargs):
+def pickle_the_variable(**kwargs) -> None:
     """
+    Pickles the variable <value> into a file ./data/<key>.pickle.
+
     >>> x = 'blah'
     >>> y = 'stuff'
     >>> pickle_the_variable(x=x, y=y)
@@ -29,8 +31,8 @@ def pickle_the_variable(**kwargs):
     >>> y == y1
     True
 
-    :param kwargs:
-    :return:
+    :param kwargs: Pairs of <key> - filename and <value> - variable to pickle
+    :return: None
     """
     # timestamp = time.time_ns()  # int
     global_path = os.path.dirname(__file__)
@@ -42,6 +44,15 @@ def pickle_the_variable(**kwargs):
 
 
 def unpickle_variables(variable_names_to_load: list[str]) -> list[Any]:
+    """
+    Unpickles the variables in <variable_names_to_load> from files
+    ./data/<variable>.pickle
+    and returns the list of the unpickled variables.
+
+    :param variable_names_to_load: List of variable names to unpickle
+    :return: List of "values" of these variables in order and in the
+        <variable_names_to_load>.
+    """
     list_to_return = []
     global_path = os.path.dirname(__file__)
 
@@ -54,10 +65,27 @@ def unpickle_variables(variable_names_to_load: list[str]) -> list[Any]:
     return list_to_return
 
 
-def get_all_data() -> torch.Tensor:
+def _get_all_data() -> torch.Tensor:
     """
-    # >>> P = 113
-    # >>> get_all_data()
+    This function generates the data for the models.
+    The data is a tensor with size: (P ** 2, 4)
+
+    Each row is an encoding of the equation of the type:
+        "A + B = (A + B) % P, (mod P)"
+    and it is encoded as:
+        "AB=C"
+        Where C == (A + B) % P,
+        and "=" is encoded as a value P
+    e.g. [50, 100, 113, 37] decodes as 50 + 100 = 37, mod 113
+
+    The function uses the global P variable
+
+    For P == 113
+    >>> all_data = _get_all_data()
+    >>> len(all_data)
+    12769
+    >>> all_data[100]
+    tensor([  0, 100, 113, 100])
     """
     global P
 
@@ -70,8 +98,41 @@ def get_all_data() -> torch.Tensor:
     return tensor_to_return
 
 
-# def get_random_data(num=4000):
-#     all_data =
+def _get_random_data(seed: int = 42,
+                     generator: Optional[torch.Generator] = None) \
+                    -> torch.Tensor:
+    """
+    A helper function that randomizes
+    # >>> P = 113
+    >>> r_data = _get_random_data()
+    >>> len(r_data)
+    12769
+    """
+    if generator is None:
+        generator = torch.Generator().manual_seed(seed)
+
+    all_data = _get_all_data()
+
+    randomized_indexes = torch.randperm(len(all_data), generator=generator)
+    randomized_data = all_data[randomized_indexes]
+
+    return randomized_data
+
+
+def get_train_and_test_data(train_fraction: float = 0.3) \
+                                        -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    >>> train_data, test_data = get_train_and_test_data()
+    >>> len(train_data)
+    3830
+    >>> len(test_data)
+    8939
+    """
+    randomized_data = _get_random_data()
+    break_point = int(len(randomized_data) * train_fraction)
+    train_data = randomized_data[:break_point]
+    test_data = randomized_data[break_point:]
+    return train_data, test_data
 
 
 def main() -> None:
