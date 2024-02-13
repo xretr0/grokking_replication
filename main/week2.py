@@ -1,8 +1,12 @@
+import torch
 import transformer_lens
 import pickle
 # import time
 from typing import Any
 import os
+
+
+P = 113
 
 
 def load_model_to_pickle() -> None:
@@ -50,18 +54,28 @@ def unpickle_variables(variable_names_to_load: list[str]) -> list[Any]:
     return list_to_return
 
 
+def get_all_data() -> torch.Tensor:
+    """
+    # >>> P = 113
+    # >>> get_all_data()
+    """
+    global P
+
+    list_tmp = []
+    for a in range(P):
+        for b in range(P):
+            sublist = [a, b, P, (a + b) % P]  # P is the encoding of the '='
+            list_tmp.append(sublist)
+    tensor_to_return = torch.tensor(list_tmp)
+    return tensor_to_return
+
+
+# def get_random_data(num=4000):
+#     all_data =
+
+
 def main() -> None:
-
-    with open('data/model_backup.pickle', 'rb') as in_f:
-        model = pickle.load(in_f)
-
-    pass
-
-    # Run the model and get logits and activations
-    logits, activations = model.run_with_cache("Hello World")
-    #
-    print(logits, activations)
-    pass
+    global P
 
     config_dict = {
         'd_model': 128,
@@ -70,7 +84,7 @@ def main() -> None:
         'n_ctx': 4,  # for 'ab={thing_we_care_about}'
         'n_heads': 4,
         'd_mlp': 512,
-        'd_vocab': 114,
+        'd_vocab': P + 1,
         'act_fn': 'relu',
         'use_attn_result': True,
         'use_split_qkv_input': True,
@@ -79,8 +93,11 @@ def main() -> None:
         'normalization_type': None,
         'seed': 192,  # Set by us
         'positional_embedding_type': 'standard',
-
     }
+    model = transformer_lens.HookedTransformer(config_dict)
+    input_data = torch.tensor([[1, 2, 3]])
+    predictions = model(input_data)[0, -1, :]
+    print(1, predictions)
 
 
 if __name__ == "__main__":
