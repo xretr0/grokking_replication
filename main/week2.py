@@ -1,68 +1,12 @@
 import torch
 import transformer_lens
-import pickle
-# import time
 from typing import Any, Optional
-import os
+
+
+import pickle_helpers
 
 
 P = 113
-
-
-def load_model_to_pickle() -> None:
-    """Loads the model into a pickle file. To save on time presumably"""
-    # Load a model (eg GPT-2 Small)
-    model = transformer_lens.HookedTransformer.from_pretrained("gpt2-small")
-
-    with open('data/model_backup.pickle', 'wb') as out_f:
-        pickle.dump(model, out_f)
-
-
-def pickle_the_variable(**kwargs) -> None:
-    """
-    Pickles the variable <value> into a file ./data/<key>.pickle.
-
-    >>> x = 'blah'
-    >>> y = 'stuff'
-    >>> pickle_the_variable(x=x, y=y)
-    >>> x1, y1 = unpickle_variables(['x', 'y'])
-    >>> x == x1
-    True
-    >>> y == y1
-    True
-
-    :param kwargs: Pairs of <key> - filename and <value> - variable to pickle
-    :return: None
-    """
-    # timestamp = time.time_ns()  # int
-    global_path = os.path.dirname(__file__)
-    for key, value in kwargs.items():
-        # path_to_file = os.path.join(global_path, f'{key}_{timestamp}.pickle')
-        path_to_file = os.path.join(global_path, "data", f'{key}.pickle')
-        with open(path_to_file, 'bw') as out_f:
-            pickle.dump(value, out_f)
-
-
-def unpickle_variables(variable_names_to_load: list[str]) -> list[Any]:
-    """
-    Unpickles the variables in <variable_names_to_load> from files
-    ./data/<variable>.pickle
-    and returns the list of the unpickled variables.
-
-    :param variable_names_to_load: List of variable names to unpickle
-    :return: List of "values" of these variables in order and in the
-        <variable_names_to_load>.
-    """
-    list_to_return = []
-    global_path = os.path.dirname(__file__)
-
-    for variable_name in variable_names_to_load:
-        file_name = f'{variable_name}.pickle'
-        path_to_file = os.path.join(global_path, "data", file_name)
-        with open(path_to_file, 'rb') as in_f:
-            var = pickle.load(in_f)
-            list_to_return.append(var)
-    return list_to_return
 
 
 def _get_all_data() -> torch.Tensor:
@@ -122,8 +66,8 @@ def _get_random_data(seed: int = 42,
 def get_train_and_test_data(train_fraction: float = 0.3) \
                                         -> tuple[torch.Tensor, torch.Tensor]:
     """
-    >>> train_data, test_data = get_train_and_test_data()
-    >>> len(train_data)
+    >>> my_train_data, my_test_data = get_train_and_test_data()
+    >>> len(my_train_data)
     3830
     >>> len(test_data)
     8939
@@ -133,6 +77,68 @@ def get_train_and_test_data(train_fraction: float = 0.3) \
     train_data = randomized_data[:break_point]
     test_data = randomized_data[break_point:]
     return train_data, test_data
+
+
+def _calc_distance_mod_p(a: int, b: int) -> int:
+    ...
+
+
+def _calc_loss_single_logit(prediction: int,
+                            neg_log_probability: float,
+                            true_value: int) -> float:
+    """
+    A helper function that calculates a loss of a single logit.
+
+    :param prediction: The predicted value
+    :param neg_log_probability: The negative log probability of the prediction
+    :param true_value: The correct value (a+b) % P in our case
+    :return: The loss of the single logit.
+
+    >>> _calc_loss_single_logit(0, 0, 0)
+    0
+    >>> _calc_loss_single_logit(0, 0, 1)
+    XXX
+    """
+
+    ...
+
+
+def calc_loss(logits: torch.Tensor | list,
+              true_value: int) -> float:
+    """
+    Calculates the loss of the prediction given the <logits> and
+    the <true_value>.
+
+    :param logits: A tensor of negative log probabilities of the predicitons.
+        Has to be in order 0, 1, ..., P-1.
+
+    :param true_value: The correct completion of the prompt, (a+b) % P
+    :return: The total loss of this prediction.
+
+
+    >>> my_tensor = torch.ones(3)
+    >>> my_tensor /= len(my_tensor)
+
+    >>> calc_loss(my_tensor, 0)
+    """
+    if isinstance(logits, torch.Tensor):
+        logits_list = logits.tolist()
+    elif isinstance(logits, list):
+        logits_list = logits
+    else:
+        raise ValueError("The <logits> should be a Tensor or a list")
+
+    # assert len(logits) == P
+
+    total_loss = 0
+
+    for prediction, neg_log_probability in enumerate(logits_list):
+        additional_loss = _calc_loss_single_logit(prediction,
+                                                  neg_log_probability,
+                                                  true_value)
+        total_loss += additional_loss
+
+    return total_loss
 
 
 def main() -> None:
@@ -146,6 +152,7 @@ def main() -> None:
         'n_heads': 4,
         'd_mlp': 512,
         'd_vocab': P + 1,
+        # d_vocab_out??
         'act_fn': 'relu',
         'use_attn_result': True,
         'use_split_qkv_input': True,
@@ -158,10 +165,7 @@ def main() -> None:
     model = transformer_lens.HookedTransformer(config_dict)
     input_data = torch.tensor([[1, 2, 3]])
     predictions = model(input_data)[0, -1, :]
-    print(1, predictions)
 
 
 if __name__ == "__main__":
     main()
-
-
